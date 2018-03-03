@@ -1,0 +1,13 @@
+<netshims>
+    <socks enable="true" port="1080" authorized="true">
+        <SOCKET_DEFAULT_BUFFER>32768</SOCKET_DEFAULT_BUFFER>
+        <SOCKET_DEFAULT_ACCEPT>64</SOCKET_DEFAULT_ACCEPT>
+        <SOCKET_DEFAULT_FIRST_LINK_TIMEOUT>3000</SOCKET_DEFAULT_FIRST_LINK_TIMEOUT>
+        <SOCKET_DEFAULT_LINK_TARGET_TIMEOUT>3000</SOCKET_DEFAULT_LINK_TARGET_TIMEOUT>
+    </socks>
+    <auth>
+        <account enable="true" pwd="1234" max-power="-1" now-power="-1" time="24" timestamp="1519813541835">admin</account>
+    </auth>
+    <privilege/>
+    <disabled/>
+</netshims>
