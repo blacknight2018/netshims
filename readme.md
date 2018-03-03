@@ -4,6 +4,20 @@ netshims
 这是一个简单的网络代理服务端程序,虽然目前仅支持`SOCKS`第五版协议,但它目前仍在努力更新和完善中,
 在不久的将来它将会实现支持更多更丰富的功能,感谢你能在此找到它,希望它能在你的学习或工作中对你有所帮助。
 
+compile(only windows)
+------------------------
+
+下载并安装[cmake](https://cmake.org/download/),并将`cmake`的运行目录'例如: d:\CMake\bin'设置都系统环境变量中,
+运行cmd执行以下shell:
+```Bash
+cd netshims
+mkdir build
+cd build
+cmake ..
+```
+
+###### netshims 为clone的netshims源代码文件夹路径
+
 shell
 ---------------
 在终端中输入`netshims --help`将会获得详细的shell选项信息。
