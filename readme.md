@@ -8,23 +8,23 @@ shell
 ---------------
 在终端中输入'netshims --help'将会获得详细的shell选项信息。
 
-'-r'                            = 启动服务端程序
-'-socks-port <port>'            = 设置'socks-server'监听端口
-'-socks-enable <true/false>'    = 设置是否启用'socks-server'服务程序
-'-socks-auth <true/false>'      = 设置是否启用授权验证
-'-socks-def-buffer <size>'      = 设置'socks-server'服务程序的缓冲区大小
-'-socks-def-accept <count>'     = 设置'socks-server'服务程序的缓存套接字投递数量
-'-socks-timeout-first <time>'   = 设置客户连接后未发送数据包的超时时间(毫秒)
-'-socks-timeout-link <time>'    = 设置代理客户连接至目标服务器的超时时间(毫秒)
-'-auth-add <user:pwd> [-max-power <data-flow(mb)>] [-time <hour>]'
-添加一个授权用户,使用选项'-max-power'或者'-time'可以限制该用户的使用范围。
-示例:
-'netshims -auth-add admin:1234 -max-power 8000 -time 240'
-'netshims -auth-add test:1234 -time 24'
-'-auth-del <user>'              = 取消指定用户的授权资格('#' = 所有用户)
-'-p <client> [-cancel]'         = 设置客户白名单(使用'IPv4'地址)
-'-d <client> [-cancel]'         = 设置客户黑名单(使用'IPv4'地址)
-如果添加了'-cancel'选项,则表示为将该客户从白名单/黑名单中移除
+'-r'                            = 启动服务端程序</br>
+'-socks-port <port>'            = 设置'socks-server'监听端口</br>
+'-socks-enable <true/false>'    = 设置是否启用'socks-server'服务程序</br>
+'-socks-auth <true/false>'      = 设置是否启用授权验证</br>
+'-socks-def-buffer <size>'      = 设置'socks-server'服务程序的缓冲区大小</br>
+'-socks-def-accept <count>'     = 设置'socks-server'服务程序的缓存套接字投递数量</br>
+'-socks-timeout-first <time>'   = 设置客户连接后未发送数据包的超时时间(毫秒)</br>
+'-socks-timeout-link <time>'    = 设置代理客户连接至目标服务器的超时时间(毫秒)</br>
+'-auth-add <user:pwd> [-max-power <data-flow(mb)>] [-time <hour>]'</br>
+添加一个授权用户,使用选项'-max-power'或者'-time'可以限制该用户的使用范围。</br>
+示例:</br>
+'netshims -auth-add admin:1234 -max-power 8000 -time 240'</br>
+'netshims -auth-add test:1234 -time 24'</br>
+'-auth-del <user>'              = 取消指定用户的授权资格('#' = 所有用户)</br>
+'-p <client> [-cancel]'         = 设置客户白名单(使用'IPv4'地址)</br>
+'-d <client> [-cancel]'         = 设置客户黑名单(使用'IPv4'地址)</br>
+如果添加了'-cancel'选项,则表示为将该客户从白名单/黑名单中移除</br>
 
 socks-server
 ---------------
