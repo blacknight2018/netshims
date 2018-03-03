@@ -7,7 +7,7 @@ netshims
 compile(only windows)
 ------------------------
 
-下载并安装[cmake](https://cmake.org/download/),并将`cmake`的运行目录'例如: d:\CMake\bin'设置都系统环境变量中,
+下载并安装[cmake](https://cmake.org/download/),并将`cmake`的运行目录"如: d:\CMake\bin"设置到系统环境变量中,
 运行cmd执行以下shell:
 ```Bash
 cd netshims
@@ -16,7 +16,7 @@ cd build
 cmake ..
 ```
 
-###### netshims 为clone的netshims源代码文件夹路径
+###### netshims 为netshims源代码文件夹路径
 
 shell
 ---------------
