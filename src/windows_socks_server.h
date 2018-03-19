@@ -168,6 +168,9 @@ struct SOCKS_CLIENT_INFO {
 
 	//客户的地址类型
 	BYTE ipMode;
+
+	//客户是否要求认证
+	BOOL auth;
 };
 
 //异步任务标识
@@ -371,7 +374,7 @@ namespace nswindows {
 		///
 		// 要求关闭服务器,只有| m_type | 类型为"SST_LISTEN"时才可使用
 		///
-		void PostClosed(void);
+		//void PostClosed(void);
 
 		///
 		// 绑定一个未完成的异步回调任务
@@ -430,7 +433,28 @@ namespace nswindows {
 		BOOL DoProxyTargetLink(AutoRefPtr<SockByteStream> request, DWORD receiveBytesTransfered);
 
     protected:
-        IMPLEMENT_NS_REFCOUNTING(SocksNetworkTransfered)
+        //IMPLEMENT_NS_REFCOUNTING(SocksNetworkTransfered)
+
+	public:
+		void AddRef() const OVERRIDE { 
+			m_ref.AddRef(); 
+		}
+
+		bool Release() const OVERRIDE {
+			if (m_ref.Release()){
+				delete static_cast<const SocksNetworkTransfered*>(this);
+				return true;
+			}
+			else {
+				return false;
+			}		
+		} 
+
+		bool HasOneRef() const OVERRIDE {
+			return m_ref.HasOneRef();
+		} 
+	private:
+		AutoRef m_ref;
     };
 
 	//用于实现重叠IO管理的类
@@ -498,7 +522,12 @@ namespace nswindows {
 
 	public:
 		//手动完成任务
-		void Finished(void) { m_coped = TRUE; }
+		void Finished(void) { 
+			if (m_coped == FALSE) {
+				m_coped = TRUE;
+				m_clientHandler = NULL;
+			}
+		}
 
 		//获取任务类型
 		SOCKS_ASYNC_SHELL GetType(void) { return m_cmd; }

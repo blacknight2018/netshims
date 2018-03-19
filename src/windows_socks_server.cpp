@@ -1,4 +1,5 @@
 #include "windows_socks_server.h"
+#include <atlconv.h>
 
 namespace nswindows {
     LPFN_CONNECTEX fnConnectEx;
@@ -76,6 +77,7 @@ SocksNetworkTransfered::SocksNetworkTransfered(int port, BOOL enableAuthorized,
         m_errCode = WSAGetLastError();
         return;
     }
+	printf("listen socket %d \n",m_socket);
     SOCKADDR_IN listenAddr = {0};
     listenAddr.sin_family = AF_INET;
     listenAddr.sin_port = htons(port);
@@ -93,6 +95,7 @@ SocksNetworkTransfered::SocksNetworkTransfered(int port, BOOL enableAuthorized,
     SYSTEM_INFO sysInfo = {0};
     GetSystemInfo(&sysInfo);
     int cpu = sysInfo.dwNumberOfProcessors *2 + 2;
+	//int cpu = 1;
 	/////////////////////////////////////////////////////////////////////////////
 	//  创建任务池
 	m_taskDispatchs = new AsyncTaskPool(cpu, cpu * 2);
@@ -156,6 +159,7 @@ SocksNetworkTransfered::SocksNetworkTransfered(SOCKS_SERVER_TYPE type,
     m_errCode(0)
 {
     m_client.nowPosition = SPS_NOTHING;
+	m_client.auth = FALSE;
 	m_enableAuthhorized = FALSE;
 	printf("new SocksNetworkTransfered \n");
 	m_iocpServerHandle = NULL;
@@ -186,6 +190,7 @@ void CALLBACK SocksNetworkTransfered::OnServerWorker(SocksNetworkTransfered *pLe
         }
 		else {
 			if (pLead->HasOneRef()) {
+				printf("Listen OnRef!!!!! \n");
 				break;
 			}
             if(pCompleteKey){
@@ -197,6 +202,7 @@ void CALLBACK SocksNetworkTransfered::OnServerWorker(SocksNetworkTransfered *pLe
 			else break;
         }
     }
+	printf("server worker destory! \n");
 	HANDLE_DESTORY(pLead->m_iocpClientHandle);
 	HANDLE_DESTORY(pLead->m_iocpServerHandle);
     pLead->Release();
@@ -215,6 +221,7 @@ void CALLBACK SocksNetworkTransfered::OnClientWorker(SocksNetworkTransfered *pLe
         }
 		else {
 			if (pLead->HasOneRef()) {
+				printf("Listen OnRef!!!!! \n");
 				break;
 			}
             if(pCompleteKey){
@@ -226,6 +233,7 @@ void CALLBACK SocksNetworkTransfered::OnClientWorker(SocksNetworkTransfered *pLe
 			else break;
         }
     }
+	printf("client worker destory! \n");
 	HANDLE_DESTORY(pLead->m_iocpClientHandle);
 	HANDLE_DESTORY(pLead->m_iocpServerHandle);
     pLead->Release();
@@ -358,8 +366,8 @@ void SocksNetworkTransfered::DoAccept(AutoRefPtr<SockByteStream> request,DWORD r
 	 pClientHandler->SetPending(pTask);
 	 m_taskDispatchs->PostTask(pTask, m_defaultFirstLinkTimeout);
 
-	 AutoRefPtr<SockKeepAliveTask> pKeepAlive = new SockKeepAliveTask(GetTickCount(),this, pClientHandler,FALSE);//加入活动连接列表
-	 this->m_taskDispatchs->PostTask(pKeepAlive);
+	 //AutoRefPtr<SockKeepAliveTask> pKeepAlive = new SockKeepAliveTask(GetTickCount(),this, pClientHandler,FALSE);//加入活动连接列表
+	 //this->m_taskDispatchs->PostTask(pKeepAlive);
 }
 
 void SocksNetworkTransfered::DoConnected(AutoRefPtr<SockByteStream> request,DWORD receiveBytesTransfered){
@@ -420,20 +428,26 @@ void SocksNetworkTransfered::DoSend(AutoRefPtr<SockByteStream> request,DWORD rec
 }
 
 void SocksNetworkTransfered::DoClose(AutoRefPtr<SockByteStream> request,DWORD receiveBytesTransfered){
+
+	printf("socket %d closed! \n",m_socket);
+
 	if (m_pair.get()) {
 		CancelIo((HANDLE)m_pair->m_socket);
 		closesocket(m_pair->m_socket);
 	}
-
-	if (m_type == SST_SERVER) {
-		AutoRefPtr<SockKeepAliveTask> pKeepAlive = new SockKeepAliveTask(GetTickCount(), this->m_server, this, TRUE);//删除活动连接列表
-		this->m_taskDispatchs->PostTask(pKeepAlive);
+	if (m_type == SST_LISTEN) {
+		printf("SST_LISTEN destory! \n");
 	}
+
+
+	//if (m_type == SST_SERVER) {
+	//	AutoRefPtr<SockKeepAliveTask> keepalive = new SockKeepAliveTask(GetTickCount(), this->m_server, this, TRUE);//删除活动连接列表
+	//	this->m_taskDispatchs->PostTask(keepalive);
+	//}
 
 	m_pair = NULL;
 	m_taskDispatchs = NULL;
 	m_pending = NULL;
-	m_server = NULL;
 
 	if (m_socket) {
 		closesocket(m_socket);	//关闭套接字
@@ -442,6 +456,7 @@ void SocksNetworkTransfered::DoClose(AutoRefPtr<SockByteStream> request,DWORD re
 		}
 		m_socket = NULL;
 	}
+	m_server = NULL;
 }
 
 ///
@@ -453,6 +468,7 @@ BOOL SocksNetworkTransfered::PostAccept(void){
     DWORD receiveBytesTransfered = 0;
     if(FALSE == fnAcceptEx(m_socket,s,pConnBuf->GetBuffer(),0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16,&receiveBytesTransfered,pConnBuf->GetInterface())){
        if(WSAGetLastError()!=WSA_IO_PENDING){
+		   printf("Post Accept Error %d \n", WSAGetLastError());
             closesocket(s);
             pConnBuf->Release();
             m_errCode = WSAGetLastError();
@@ -517,28 +533,30 @@ BOOL SocksNetworkTransfered::PostReceive(AutoRefPtr<SockByteStream> request){
 ///
 // 要求关闭服务器,只有| m_type | 类型为"SST_LISTEN"时才可使用
 ///
-void SocksNetworkTransfered::PostClosed(void) {
-	if (m_type != SST_LISTEN) return;
-	m_nowServerStatus = FALSE;
-	m_lockKeepAlives.lock();
-	for (auto &v:m_keepAlives)
-	{
-		CancelIo((HANDLE)v->m_socket);
-		closesocket(v->m_socket);
-	}
-	m_keepAlives.clear();
-	m_lockKeepAlives.unlock();
-
-	//两秒后关闭连接
-	AutoRefPtr<SockCloseLinkTask> pTask = new SockCloseLinkTask(GetTickCount(), this);
-	this->m_taskDispatchs->PostTask(pTask, 2000);
-	this->m_taskDispatchs->CancelTask(m_authTask);
-	m_authTask = NULL;
-}
+//void SocksNetworkTransfered::PostClosed(void) {
+//	
+//	if (m_type != SST_LISTEN) return;
+//
+//	m_nowServerStatus = FALSE;
+//	m_lockKeepAlives.lock();
+//	for (auto &v:m_keepAlives)
+//	{
+//		CancelIo((HANDLE)v->m_socket);
+//		closesocket(v->m_socket);
+//	}
+//	m_keepAlives.clear();
+//	m_lockKeepAlives.unlock();
+//
+//	//两秒后关闭连接
+//	AutoRefPtr<SockCloseLinkTask> pTask = new SockCloseLinkTask(GetTickCount(), this);
+//	this->m_taskDispatchs->PostTask(pTask, 2000);
+//	this->m_taskDispatchs->CancelTask(m_authTask);
+//	m_authTask = NULL;
+//}
 
 ///
 // 设置连接对,
-// pair : 当一条正向连接代理建立时,会产生两个连接点L1: Client->Proxy, L2: Proxy->Server,
+// pair : 一条正向连接代理建立时,会产生两个连接点L1: Client->Proxy, L2: Proxy->Server,
 // 当该对象类型为"SST_SERVER"时,表示为"L1",当该对象类型为"SST_CLIENT"时,表示为"L2",
 // "L1"接收到的数据将通过| pair | 所指向的"L2"对象发送出去,
 // 反之"L2"对象接收的数据也将通过| pair | 指向的"L1"对象发送出去。
@@ -605,7 +623,11 @@ BOOL SocksNetworkTransfered::DoProxyAuth(AutoRefPtr<SockByteStream> request, DWO
 	BYTE ver = protocolBuffer[0];
 	BYTE p = 1;
 	std::string user, pwd;
+
+	//如果服务端未开启认证,则放行所有连接
 	if (m_server->m_enableAuthhorized == FALSE) {
+		m_client.nowPosition = SPS_LINK;
+		PostProxyAuthFinshed();
 		return TRUE;
 	}
 	if (m_server->m_pAuth == NULL) {
@@ -796,7 +818,7 @@ SockByteStream::~SockByteStream(){
 
 SockFirstLinkCheckTask::SockFirstLinkCheckTask(DWORD tm, AutoRefPtr<SocksNetworkTransfered> pClientHandler):
 	SockAsyncTask(tm, pClientHandler, SOCKS_ASYNC_SHELL::SAS_FIRST_LINK_CHECK){
-
+	printf("SockFirstLinkCheckTask new!\n");
 }
 
 SockFirstLinkCheckTask::~SockFirstLinkCheckTask() {
@@ -805,17 +827,17 @@ SockFirstLinkCheckTask::~SockFirstLinkCheckTask() {
 
 void SockFirstLinkCheckTask::OnCalling() {
 	if (m_coped == FALSE) {	//任务未被处理
+		m_coped = TRUE;
 		printf("The client %s long time non sent data (req: link closed)! \n", m_clientHandler->m_client.name.c_str());
 		CancelIo((HANDLE)m_clientHandler->m_socket);
 		closesocket(m_clientHandler->m_socket);
 	}
-	m_coped = TRUE;
 	m_clientHandler = NULL;
 }
 
 SockLinkTargetTask::SockLinkTargetTask(DWORD tm, AutoRefPtr<SocksNetworkTransfered> pClientHandler):
 	SockAsyncTask(tm, pClientHandler, SOCKS_ASYNC_SHELL::SAS_LINK_TARGET) {
-
+	printf("SockLinkTargetTask new!\n");
 }
 
 SockLinkTargetTask::~SockLinkTargetTask() {
@@ -825,7 +847,7 @@ SockLinkTargetTask::~SockLinkTargetTask() {
 void SockLinkTargetTask::OnCalling() {
 
 	if (m_coped == FALSE) {	//任务未被处理
-
+		m_coped = TRUE;
 		SOCKET s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
 
 		SOCKET_ADDRESS_LIST listInfo = { 0 };
@@ -861,72 +883,22 @@ void SockLinkTargetTask::OnCalling() {
 			pNewLinkHandler->DoConnected(request, 0);
 			pNewLinkHandler->Release();
 		}
-
-
-		//if ((signed int)s == SOCKET_ERROR) {
-		//	printf("create socket failed! (req: link closed)! \n");
-		//jmp_error:
-		//	CancelIo((HANDLE)m_clientHandler->m_socket);
-		//	closesocket(m_clientHandler->m_socket);
-		//	m_coped = TRUE;
-		//	m_clientHandler = NULL;
-		//	return;
-		//}
-
-		//SOCKADDR_IN connAddr = { 0 };
-		//SOCKADDR_IN binAddr = { 0 };
-		//connAddr.sin_family =  AF_INET;
-		//binAddr.sin_family = AF_INET;
-		//connAddr.sin_addr.S_un.S_addr = m_clientHandler->m_client.serverLinkAddr.sin_addr.S_un.S_addr;
-		//connAddr.sin_port = htons(m_clientHandler->m_client.serverLinkAddr.sin_port);
-
-		//if (bind(s, (sockaddr*)&binAddr, sizeof(sockaddr)) != SOCKET_ERROR) {
-		//	AutoRefPtr<SocksNetworkTransfered> pNewLinkHandler = new SocksNetworkTransfered(SST_CLIENT, s,
-		//		m_clientHandler->m_server->m_iocpClientHandle,
-		//		m_clientHandler,
-		//		m_clientHandler->m_server,
-		//		m_clientHandler->m_taskDispatchs);
-		//	AutoRefPtr<SockByteStream> pConnect = new SockByteStream(SOCKS_NET_STATUS::NET_CONNECT);
-		//	CreateIoCompletionPort((HANDLE)s, pNewLinkHandler->m_iocpClientHandle, pNewLinkHandler->GetInterface(), 0);	//绑定完成端口
-		//	DWORD sentBytes = 0;
-		//	if (fnConnectEx(s, (sockaddr*)&connAddr, sizeof(sockaddr), NULL, 0, NULL, pConnect->GetInterface()) == SOCKET_ERROR) {
-		//		if (WSAGetLastError() != WSA_IO_PENDING) {
-		//			printf("Post ConnectEx failed! (req: link closed)! %d \n",WSAGetLastError());
-		//			closesocket(s);
-		//			pConnect->Release();
-		//			pNewLinkHandler->Release();
-		//			goto jmp_error;
-		//		}
-		//	}
-		//	setsockopt(s, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0);
-
-		//	m_clientHandler->SetPair(pNewLinkHandler);
-		//	//是否连接成功检查
-		//	AutoRefPtr<SockLinkSucessTask> pTask = new SockLinkSucessTask(GetTickCount(), m_clientHandler);
-		//	m_clientHandler->SetPending(pTask);
-		//	m_clientHandler->m_taskDispatchs->PostTask(pTask, SOCKET_DEFAULT_LINK_TARGET_TIMEOUT);
-		//}
-		//else {
-		//	printf("The client %s bind failed,error %d (req: link closed)! \n", m_clientHandler->m_client.name.c_str(),WSAGetLastError());
-		//	CancelIo((HANDLE)m_clientHandler->m_socket);
-		//	closesocket(m_clientHandler->m_socket);
-		//}
 	}
-	m_coped = TRUE;
 	m_clientHandler = NULL;
 }
 
 SockLinkTargetExTask::SockLinkTargetExTask(DWORD tm, AutoRefPtr<SocksNetworkTransfered> pClientHandler):
 	SockAsyncTask(tm, pClientHandler, SOCKS_ASYNC_SHELL::SAS_LINK_TARGET) {
-
+	printf("SockLinkTargetExTask new!\n");
 }
 
 SockLinkTargetExTask::~SockLinkTargetExTask() {
-
+	printf("SockLinkTargetExTask free!\n");
 }
 
 void SockLinkTargetExTask::OnCalling() {
 	if (m_coped == FALSE) {
+		m_coped = TRUE;
 		SOCKET s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
 		char szServiceBuffer[32];
 		_itoa_s(m_clientHandler->m_client.serverLinkAddr.sin_port, szServiceBuffer,32, 10);
@@ -940,7 +912,8 @@ void SockLinkTargetExTask::OnCalling() {
 		SOCKADDR_IN outRemoteAddr = { 0 };
 		timeval timeout = { 0 };
 		timeout.tv_usec = m_clientHandler->m_server->m_defaultLinkTargetTimeout;
-		BOOL status = WSAConnectByName(s,m_clientHandler->m_client.serverDomain.c_str(), szServiceBuffer,
+		USES_CONVERSION;
+		BOOL status = WSAConnectByName(s,A2W(m_clientHandler->m_client.serverDomain.c_str()), A2W(szServiceBuffer),
 			&dwLength1, (sockaddr*)&outLocalAddr, &dwLength2, (sockaddr*)&outRemoteAddr, &timeout, NULL);
 		if (!status) {
 			printf("The server connected to the customer's %s needs failed (req: link closed)! \n", m_clientHandler->m_client.name.c_str());
@@ -964,13 +937,12 @@ void SockLinkTargetExTask::OnCalling() {
 			pNewLinkHandler->Release();
 		}
 	}
-	m_coped = TRUE;
 	m_clientHandler = NULL;
 }
 
 SockLinkSucessTask::SockLinkSucessTask(DWORD tm, AutoRefPtr<SocksNetworkTransfered> pClientHandler):
 	SockAsyncTask(tm,pClientHandler,SAS_LINK_SUCCESS) {
-
+	printf("SockLinkSucessTask new!\n");
 }
 
 SockLinkSucessTask::~SockLinkSucessTask() {
@@ -979,6 +951,7 @@ SockLinkSucessTask::~SockLinkSucessTask() {
 
 void SockLinkSucessTask::OnCalling() {
 	if (m_coped == FALSE) {
+		m_coped = TRUE;
 		printf("The client %s proxy target %s:%d failed (req: link closed)! \n", m_clientHandler->m_client.name.c_str(),
 			inet_ntoa(m_clientHandler->m_client.serverLinkAddr.sin_addr),
 			m_clientHandler->m_client.serverLinkAddr.sin_port);
@@ -988,13 +961,12 @@ void SockLinkSucessTask::OnCalling() {
 		AutoRefPtr<SockCloseLinkTask> pTask = new SockCloseLinkTask(GetTickCount(), m_clientHandler);
 		m_clientHandler->m_taskDispatchs->PostTask(pTask, 1000);
 	}
-	m_coped = TRUE;
 	m_clientHandler = NULL;
 }
 
 SockCloseLinkTask::SockCloseLinkTask(DWORD tm, AutoRefPtr<SocksNetworkTransfered> pClientHandler):
 	SockAsyncTask(tm, pClientHandler, SAS_CLOSE_LINK) {
-
+	printf("SockCloseLinkTask new!\n");
 }
 
 SockCloseLinkTask::~SockCloseLinkTask() {
@@ -1003,10 +975,10 @@ SockCloseLinkTask::~SockCloseLinkTask() {
 
 void SockCloseLinkTask::OnCalling() {
 	if (m_coped == FALSE) {	//任务未被处理
+		m_coped = TRUE;
 		CancelIo((HANDLE)m_clientHandler->m_socket);
 		closesocket(m_clientHandler->m_socket);
 	}
-	m_coped = TRUE;
 	m_clientHandler = NULL;
 }
 
@@ -1014,6 +986,7 @@ SockKeepAliveTask::SockKeepAliveTask(DWORD tm, AutoRefPtr<SocksNetworkTransfered
 	SockAsyncTask(tm, pClientHandler, SAS_KEEPALIVE) {
 	m_pTargetHandler = pTargetHandler;
 	m_cancel = cancel;
+	printf("SockKeepAliveTask new!\n");
 }
 
 SockKeepAliveTask::~SockKeepAliveTask() {
@@ -1022,6 +995,7 @@ SockKeepAliveTask::~SockKeepAliveTask() {
 
 void SockKeepAliveTask::OnCalling() {
 	if (m_coped == FALSE) {
+		m_coped = TRUE;
 		if (m_cancel == FALSE) {
 			m_clientHandler->m_lockKeepAlives.lock();
 			m_clientHandler->m_keepAlives.push_back(m_pTargetHandler);
@@ -1033,6 +1007,7 @@ void SockKeepAliveTask::OnCalling() {
 			auto iend = m_clientHandler->m_keepAlives.end();
 			for (;iter!=iend;iter++){
 				if (iter->get() == m_pTargetHandler.get()) {
+					(*iter) = NULL;
 					m_clientHandler->m_keepAlives.erase(iter);
 					break;
 				}
@@ -1040,7 +1015,6 @@ void SockKeepAliveTask::OnCalling() {
 			m_clientHandler->m_lockKeepAlives.unlock();
 		}
 	}
-	m_coped = TRUE;
 	m_clientHandler = NULL;
 	m_pTargetHandler = NULL;
 }
@@ -1049,14 +1023,16 @@ SockDomainParseTask::SockDomainParseTask(DWORD tm, AutoRefPtr<SocksNetworkTransf
 	SockAsyncTask(tm, pClientHandler, SAS_DOMAIN_PARSER) {
 	m_domain = domain;
 	m_port = port;
+	printf("SockDomainParseTask new!\n");
 }
 
 SockDomainParseTask::~SockDomainParseTask() {
-
+	printf("SockDomainParseTask destory!\n");
 }
 
 void SockDomainParseTask::OnCalling(void) {
 	if (m_coped == FALSE) {
+		m_coped = TRUE;
 		ADDRINFOEX hints = { 0 };
 		ADDRINFOEX *pResult = NULL;
 		hints.ai_family = AF_INET;
@@ -1064,7 +1040,8 @@ void SockDomainParseTask::OnCalling(void) {
 		hints.ai_socktype = SOCK_STREAM;
 		char szPortName[32];
 		_itoa_s(m_port, szPortName, 32, 10);
-		int status = GetAddrInfoEx(m_domain.c_str(), szPortName,NS_DNS,NULL, &hints, &pResult,NULL,NULL,NULL,NULL);
+		USES_CONVERSION;
+		int status = GetAddrInfoEx(A2W(m_domain.c_str()), A2W(szPortName),NS_DNS,NULL, &hints, &pResult,NULL,NULL,NULL,NULL);
 		if (status == SOCKET_ERROR) {
 			m_clientHandler->PostProxyFailed();
 			//一秒后关闭连接
@@ -1088,17 +1065,16 @@ void SockDomainParseTask::OnCalling(void) {
 			FreeAddrInfoEx(pResult);
 		}
 	}
-	m_coped = TRUE;
 	m_clientHandler = NULL;
 }
 
 SockAuthUpdateTask::SockAuthUpdateTask(DWORD tm, AutoRefPtr<SocksNetworkTransfered> pClientHandler):
 	SockAsyncTask(tm, pClientHandler, SAS_AUTH_UPDATE) {
-
+	printf("SockAuthUpdateTask new!\n");
 }
 
 SockAuthUpdateTask::~SockAuthUpdateTask() {
-
+	printf("SockAuthUpdateTask destory!\n");
 }
 
 void SockAuthUpdateTask::OnCalling(void) {

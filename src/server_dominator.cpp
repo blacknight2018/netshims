@@ -53,7 +53,7 @@ void NSServer::SocksDominator::Run(void){
 //  停止服务
 void NSServer::SocksDominator::Stop(void){
     if(m_pServer){
-        m_pServer->PostClosed();
+        //m_pServer->PostClosed();
         m_pServer = nullptr;
 		printf("sock-server end!\n");
     }

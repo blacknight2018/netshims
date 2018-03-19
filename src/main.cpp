@@ -25,7 +25,7 @@ int main(int argc,char *argv[]){
 		}
 		return 0;
 	}
-
+	goto jmp_code;
 	////////////////////////////////////////////////////////////////////////////
 	if (argc <= 1) {	//°ïÖú
 		printf("Usage \n\n");

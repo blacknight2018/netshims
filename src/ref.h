@@ -52,6 +52,8 @@ namespace ref {
 	    bool Release(void) const { Atomic32 res = InterlockedDecrement(&m_ref_count); if (res == 0) return true; else return false; }
 
 	    bool HasOneRef(void) const { if (InterlockedExchange(&m_ref_count, m_ref_count) == 1) return true; else return false; }
+
+		Atomic32 GetRef(void) const { return InterlockedExchange(&m_ref_count, m_ref_count); }
     private:
         mutable Atomic32 m_ref_count;
     };
